@@ -1,34 +1,39 @@
 'use client';
 
 import { useState, useRef, ChangeEvent, FormEvent } from 'react';
-
-// P2: Add a loading spinner icon
-// import { ArrowPathIcon } from '@heroicons/react/24/solid'; // Or your preferred icon library
 import { ArrowPathIcon } from '@heroicons/react/24/solid';
+import type { LightroomSettings } from '@/lib/presetUtils';
+import PresetCard from '@/components/PresetCard';
 
 interface GeneratedPresetData {
   xmp: string;
   displaySettings: string;
   originalFilename: string;
   generatedAt: string;
+  settings: LightroomSettings;
 }
 
 export default function HomePage() {
   const [primaryPhoto, setPrimaryPhoto] = useState<File | null>(null);
   const [inspirationPhotos, setInspirationPhotos] = useState<File[]>([]);
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
   const [textPrompt, setTextPrompt] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string>('');
-  const [generatedPreset, setGeneratedPreset] = useState<GeneratedPresetData | null>(null);
+  const [generatedPresets, setGeneratedPresets] = useState<GeneratedPresetData[]>([]);
   const [selectedAiModel, setSelectedAiModel] = useState<string>('gemini-2.0-flash'); // Default to Gemini 2.0 Flash
   const primaryInputRef = useRef<HTMLInputElement>(null);
   const inspirationInputRef = useRef<HTMLInputElement>(null);
 
   const handlePrimaryPhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
-      setPrimaryPhoto(event.target.files[0]);
-      setGeneratedPreset(null);
+      const file = event.target.files[0];
+      setPrimaryPhoto(file);
+      setGeneratedPresets([]);
       setFeedbackMessage('');
+      // Create object URL for slider preview
+      const url = URL.createObjectURL(file);
+      setOriginalImageUrl(url);
     }
   };
 
@@ -36,14 +41,14 @@ export default function HomePage() {
     if (event.target.files) {
       const filesArray = Array.from(event.target.files);
       setInspirationPhotos(filesArray);
-      setGeneratedPreset(null);
+      setGeneratedPresets([]);
       event.target.value = '';
     }
   };
 
   const handleTextPromptChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     setTextPrompt(event.target.value);
-    setGeneratedPreset(null);
+    setGeneratedPresets([]);
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -54,7 +59,7 @@ export default function HomePage() {
     }
     setIsLoading(true);
     setFeedbackMessage('🤖 Generating your masterpiece... This might take a few moments.');
-    setGeneratedPreset(null);
+    setGeneratedPresets([]);
 
     const formData = new FormData();
     formData.append('primaryPhoto', primaryPhoto);
@@ -73,8 +78,8 @@ export default function HomePage() {
       });
       const result = await response.json();
       if (response.ok) {
-        setFeedbackMessage(`✅ Success: ${result.message}`);
-        setGeneratedPreset(result as GeneratedPresetData);
+        setFeedbackMessage(result.message);
+        setGeneratedPresets(result.results);
       } else {
         setFeedbackMessage(`❌ Error: ${result.error || 'Something went wrong.'}`);
       }
@@ -90,25 +95,15 @@ export default function HomePage() {
     }
   };
 
-  const handleDownloadXMP = () => {
-    if (generatedPreset) {
-      const blob = new Blob([generatedPreset.xmp], { type: 'application/xml' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      const safeFilename = generatedPreset.originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_+/g, '_');
-      link.download = `${safeFilename}_ai_preset.xmp`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-    }
-  };
-
   const removePrimaryPhoto = () => {
     setPrimaryPhoto(null);
-    setGeneratedPreset(null);
+    setGeneratedPresets([]);
     setFeedbackMessage('');
     if (primaryInputRef.current) primaryInputRef.current.value = '';
+    if (originalImageUrl) {
+      URL.revokeObjectURL(originalImageUrl);
+      setOriginalImageUrl(null);
+    }
   };
 
   const removeInspirationPhoto = (index: number) => {
@@ -127,7 +122,7 @@ export default function HomePage() {
           </p>
         </header>
 
-        <form id="preset-form" onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-10">
+        <form id="preset-form" onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-6 md:space-y-10">
           {/* Section 1: Primary Photo */}
           <section className="p-6 bg-gray-700 bg-opacity-50 rounded-lg shadow-lg transition-all duration-300 hover:shadow-purple-500/30">
             <h2 className="text-2xl font-semibold mb-5 text-purple-300 border-b border-purple-700 pb-3">1. Upload Your Primary Photo</h2>
@@ -214,20 +209,20 @@ export default function HomePage() {
             <button
               type="submit"
               disabled={isLoading || !primaryPhoto}
-              className={`px-10 py-4 font-bold rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 text-lg shadow-xl focus:outline-none focus:ring-4 focus:ring-opacity-50 disabled:cursor-not-allowed disabled:opacity-60 
-                ${isLoading 
-                  ? 'bg-gray-500 text-gray-300 animate-pulse' 
+              className={`w-full md:w-auto px-6 md:px-10 py-3 md:py-4 min-h-[44px] font-bold rounded-lg transition-transform transform hover:scale-105 text-lg shadow-xl focus:outline-none focus:ring-4 focus:ring-opacity-50 disabled:cursor-not-allowed disabled:opacity-60
+                ${isLoading
+                  ? 'bg-gray-500 text-gray-300 animate-pulse'
                   : 'bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white'}
                 disabled:from-gray-500 disabled:to-gray-600`}
             >
               {isLoading ? (
                 <span className="flex items-center justify-center">
-                  {/* Placeholder for an actual spinner icon if you add one */}
-                  {/* <ArrowPathIcon className="animate-spin h-5 w-5 mr-3" /> */}
                   <ArrowPathIcon className="animate-spin h-5 w-5 mr-3" />
                   Generating...
                 </span>
-              ) : '✨ Generate Preset ✨'}
+              ) : (
+                '✨ Generate Preset ✨'
+              )}
             </button>
           </section>
         </form>
@@ -239,30 +234,13 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* Generated Preset Display */}
-        {generatedPreset && (
-          <section className="mt-12 p-6 md:p-8 bg-gray-700 bg-opacity-70 rounded-xl shadow-2xl animate-fadeInUp">
-            <h2 className="text-3xl font-bold mb-8 text-center text-transparent bg-clip-text bg-gradient-to-r from-green-300 to-teal-400">
-              Your Custom Preset is Ready!
-            </h2>
-            
-            <div className="text-center mb-8">
-              <button
-                onClick={handleDownloadXMP}
-                className="px-8 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-all duration-300 ease-in-out transform hover:scale-105 shadow-lg focus:outline-none focus:ring-4 focus:ring-purple-500 focus:ring-opacity-50"
-              >
-                Download .XMP Preset File
-              </button>
-            </div>
-
-            <div>
-              <h3 className="text-xl font-semibold mb-3 text-purple-300">Manual Settings Preview:</h3>
-              <pre className="bg-gray-900 bg-opacity-80 p-4 rounded-md text-sm text-gray-200 whitespace-pre-wrap overflow-x-auto max-h-96 ring-1 ring-gray-700">
-                {generatedPreset.displaySettings}
-              </pre>
-            </div>
-            <p className="text-xs text-gray-400 mt-6 text-center">Generated for {generatedPreset.originalFilename} at: {new Date(generatedPreset.generatedAt).toLocaleString()}</p>
-          </section>
+        {/* Generated Presets Display */}
+        {originalImageUrl && generatedPresets.length > 0 && (
+          <div className="space-y-8">
+            {generatedPresets.map((preset, idx) => (
+              <PresetCard key={idx} originalImageUrl={originalImageUrl} preset={preset} />
+            ))}
+          </div>
         )}
       </div>
     </main>

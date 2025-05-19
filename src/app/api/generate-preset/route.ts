@@ -6,8 +6,7 @@ import {
   generatePresetSettingsFromAI,
   convertSettingsToXMP,
   formatSettingsForDisplay,
-  LightroomSettings // Assuming this is exported if needed directly here, otherwise it's used internally
-} from '@/lib/presetUtils'; // Assuming @ is configured for src
+} from '@/lib/presetUtils'; // Removed unused LightroomSettings import
 
 // Define the base temporary directory within /tmp
 const BASE_TMP_DIR = path.join('/tmp', 'ai_lightroom_presets');
@@ -46,76 +45,66 @@ export async function POST(req: NextRequest) {
     requestTmpDir = await createRequestSpecificTmpDir();
     const formData = await req.formData();
 
-    const primaryPhotoFile = formData.get('primaryPhoto') as File | null;
-    const textPrompt = formData.get('textPrompt') as string | null;
-    const selectedAiModel = formData.get('selectedAiModel') as string | 'gemini-2.0-flash'; // Default to Gemini 2.0 Flash
+    // Collect all primary photos
+    const primaryPhotoFiles: File[] = [];
     const inspirationPhotoFiles: File[] = [];
-
+    let textPrompt: string | null = null;
+    let selectedAiModel: string = 'gemini-2.0-flash';
+    // Iterate form entries
     for (const [key, value] of formData.entries()) {
-      if (key.startsWith('inspirationPhoto_') && value instanceof File) {
+      if (value instanceof File && key.startsWith('primaryPhoto')) {
+        primaryPhotoFiles.push(value);
+      } else if (value instanceof File && key.startsWith('inspirationPhoto_')) {
         inspirationPhotoFiles.push(value);
+      } else if (key === 'textPrompt') {
+        textPrompt = value as string;
+      } else if (key === 'selectedAiModel') {
+        selectedAiModel = value as string;
       }
     }
-
-    if (!primaryPhotoFile) {
-      return NextResponse.json({ error: 'Primary photo is required.' }, { status: 400 });
+    if (primaryPhotoFiles.length === 0) {
+      return NextResponse.json({ error: 'At least one primary photo is required.' }, { status: 400 });
     }
-
-    // P1 Fix: Add size cap for primary photo
-    const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
-    if (primaryPhotoFile.size > MAX_FILE_SIZE_BYTES) {
-      return NextResponse.json({ error: `Primary photo exceeds size limit of ${MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB.` }, { status: 413 });
-    }
-    // P1 Fix: Sanitize original filename for use as preset name
-    const primaryPhotoOriginalName = primaryPhotoFile.name.replace(/[^a-zA-Z0-9._\-()\[\] ]/g, '').substring(0, 100);
-
-    // --- Save Primary Photo to Temp Dir ---
-    // TODO P2: For files significantly larger than ~20-50MB, consider streaming directly to disk 
-    // to avoid potential memory issues with arrayBuffer() in serverless environments.
-    // Current 20MB cap should make arrayBuffer() acceptable for now.
-    const primaryPhotoBuffer = Buffer.from(await primaryPhotoFile.arrayBuffer());
-    // Using a UUID for the temp filename itself is good, original name is just for preset metadata
-    const primaryPhotoTempFilename = `${uuidv4()}-${primaryPhotoFile.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '')}`;
-    const primaryPhotoPath = path.join(requestTmpDir, primaryPhotoTempFilename);
-    await writeFile(primaryPhotoPath, primaryPhotoBuffer);
-    console.log(`Saved primary photo to temp: ${primaryPhotoPath}`);
-
-    // --- Save Inspiration Photos to Temp Dir ---
-    const inspirationPhotoPaths: string[] = [];
-    if (inspirationPhotoFiles.length > 0) {
-      for (const photoFile of inspirationPhotoFiles) {
-        const inspirationPhotoBuffer = Buffer.from(await photoFile.arrayBuffer());
-        const inspirationPhotoFilename = `${uuidv4()}-${photoFile.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '')}`;
-        const inspirationPhotoPath = path.join(requestTmpDir, inspirationPhotoFilename);
-        await writeFile(inspirationPhotoPath, inspirationPhotoBuffer);
-        inspirationPhotoPaths.push(inspirationPhotoPath);
-        console.log(`Saved inspiration photo to temp: ${inspirationPhotoPath}`);
+    // Process each primary photo
+    const results: Array<{ xmp: string; displaySettings: string; originalFilename: string; generatedAt: string }> = [];
+    for (const primaryPhotoFile of primaryPhotoFiles) {
+      // Sanitize and name
+      const originalName = primaryPhotoFile.name.replace(/[^a-zA-Z0-9._\-\[\]() ]/g, '').substring(0, 100);
+      // Size cap
+      const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+      if (primaryPhotoFile.size > MAX_FILE_SIZE_BYTES) {
+        results.push({ xmp: '', displaySettings: '', originalFilename: originalName, generatedAt: '' });
+        continue;
       }
+      // Save primary photo
+      const buf = Buffer.from(await primaryPhotoFile.arrayBuffer());
+      const tmpFilename = uuidv4() + '-' + primaryPhotoFile.name.replace(/\s+/g, '_');
+      const primaryPath = path.join(requestTmpDir, tmpFilename);
+      await writeFile(primaryPath, buf);
+      // Save inspiration photos into paths array
+      const inspPaths: string[] = [];
+      for (const insp of inspirationPhotoFiles) {
+        const ibuf = Buffer.from(await insp.arrayBuffer());
+        const ifn = uuidv4() + '-' + insp.name.replace(/\s+/g, '_');
+        const ipath = path.join(requestTmpDir, ifn);
+        await writeFile(ipath, ibuf);
+        inspPaths.push(ipath);
+      }
+      // Generate settings
+      const aiSettings = await generatePresetSettingsFromAI(
+        primaryPath,
+        inspPaths,
+        textPrompt,
+        selectedAiModel
+      );
+      const xmp = convertSettingsToXMP(aiSettings, originalName);
+      const display = formatSettingsForDisplay(aiSettings);
+      results.push({ xmp, displaySettings: display, originalFilename: originalName, generatedAt: new Date().toISOString() });
     }
-
-    console.log(`Text prompt: ${textPrompt}`);
-    console.log('Calling generatePresetSettingsFromAI with model:', selectedAiModel);
-
-    // Call the (placeholder) AI function from presetUtils
-    const aiGeneratedSettings: LightroomSettings = await generatePresetSettingsFromAI(
-      primaryPhotoPath, 
-      inspirationPhotoPaths, 
-      textPrompt,
-      selectedAiModel
-    );
-
-    // Convert settings to XMP and formatted string
-    // Use the sanitized primaryPhotoOriginalName for the preset name
-    const xmpContent = convertSettingsToXMP(aiGeneratedSettings, primaryPhotoOriginalName);
-    const displayableSettings = formatSettingsForDisplay(aiGeneratedSettings);
-
     return NextResponse.json(
       {
-        message: 'Preset generated successfully.',
-        xmp: xmpContent,
-        displaySettings: displayableSettings,
-        originalFilename: primaryPhotoOriginalName,
-        generatedAt: new Date().toISOString(),
+        message: `✅ Successfully generated ${results.length} preset${results.length !== 1 ? 's' : ''}.`,
+        results,
       },
       { status: 200 }
     );
