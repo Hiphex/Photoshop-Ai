@@ -19,7 +19,7 @@ async function createRequestSpecificTmpDir(): Promise<string> {
   try {
     await mkdir(requestTmpDir, { recursive: true });
     return requestTmpDir;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating request-specific temp directory:', error);
     throw new Error('Could not create temporary directory.'); // Propagate error
   }

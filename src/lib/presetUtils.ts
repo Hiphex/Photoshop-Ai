@@ -226,12 +226,14 @@ export async function generatePresetSettingsFromAI(
       
       console.log('Validated & Normalized AI Settings:', validatedSettings);
       return validatedSettings;
-    } catch (parseError: any) {
-      throw new Error(`AI Response Parse Error: ${parseError.message}`);
+    } catch (parseError: unknown) {
+      const message = parseError instanceof Error ? parseError.message : String(parseError);
+      throw new Error(`AI Response Parse Error: ${message}`);
     }
 
-  } catch (error: any) {
-    throw new Error(`Error during AI preset generation: ${error.message}`);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Error during AI preset generation: ${message}`);
   }
 
   // --- Placeholder for OpenAI Integration --- 
@@ -258,9 +260,7 @@ export async function generatePresetSettingsFromAI(
   // return simulatedAiOutput;
 }
 
-/**
- * Helper function to generate simulated settings when AI fails or is not available.
- */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function generateSimulatedSettings(reason?: string): LightroomSettings {
   console.warn(`Generating simulated Lightroom settings. Reason: ${reason || 'Fallback'}`);
   const mainSCurve: ToneCurvePoint[] = [[0, 0],[64, 50],[128, 128],[192, 200],[255, 255]];
@@ -525,6 +525,7 @@ if (require.main === module) {
 /* ------------------------------------------------------------------------ */
 
 // --- AI Output Validation and Normalization ---
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function validateAndNormalizeAISettings(rawSettings: any): LightroomSettings {
   const normalized: Partial<LightroomSettings> = {};
 

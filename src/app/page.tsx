@@ -62,7 +62,7 @@ export default function HomePage() {
     formData.append('textPrompt', textPrompt);
     formData.append('selectedAiModel', selectedAiModel);
     console.log('[ handleSubmit ] FormData prepared:', formData);
-    for (let [key, value] of formData.entries()) {
+    for (const [key, value] of formData.entries()) {
       console.log(`[ handleSubmit ] FormData entry: ${key}:`, value);
     }
 
