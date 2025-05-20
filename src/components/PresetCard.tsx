@@ -16,7 +16,14 @@ interface PresetCardProps {
 }
 
 export default function PresetCard({ originalImageUrl, preset }: PresetCardProps) {
-  const [settings, setSettings] = useState<LightroomSettings>(preset.settings);
+  // Initialize only the editable settings with defaults to avoid undefined
+  const initialSettings: LightroomSettings = {
+    exposure: preset.settings.exposure ?? 0,
+    contrast: preset.settings.contrast ?? 0,
+    saturation: preset.settings.saturation ?? 0,
+    tint: preset.settings.tint ?? 0,
+  };
+  const [settings, setSettings] = useState<LightroomSettings>(initialSettings);
   const [open, setOpen] = useState(false);
 
   // Handler to download the XMP sidecar file
