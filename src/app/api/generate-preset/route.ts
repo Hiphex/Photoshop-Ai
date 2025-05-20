@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import { writeFile, mkdir, unlink, readdir, rm } from 'fs/promises';
+import { writeFile, mkdir, rm } from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid'; // For unique filenames/folders
 import {
   generatePresetSettingsFromAI,
@@ -28,10 +28,7 @@ async function createRequestSpecificTmpDir(): Promise<string> {
 // Function to clean up the request-specific temporary directory
 async function cleanupRequestSpecificTmpDir(requestTmpDir: string) {
   try {
-    const files = await readdir(requestTmpDir);
-    for (const file of files) {
-      await unlink(path.join(requestTmpDir, file));
-    }
+    // Remove entire temp directory recursively
     await rm(requestTmpDir, { recursive: true, force: true });
     console.log(`Cleaned up temporary directory: ${requestTmpDir}`);
   } catch (error) {
@@ -39,6 +36,13 @@ async function cleanupRequestSpecificTmpDir(requestTmpDir: string) {
     // Not re-throwing, as this is a cleanup step, but logging is important
   }
 }
+
+// Max upload size from env or default to 100 MiB
+const MAX_UPLOAD_BYTES = process.env.MAX_UPLOAD_BYTES
+  ? parseInt(process.env.MAX_UPLOAD_BYTES, 10)
+  : 100 * 1024 * 1024;
+
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   let requestTmpDir: string | null = null;
@@ -72,8 +76,7 @@ export async function POST(req: NextRequest) {
       // Sanitize and name
       const originalName = primaryPhotoFile.name.replace(/[^a-zA-Z0-9._\-\[\]() ]/g, '').substring(0, 100);
       // Size cap
-      const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
-      if (primaryPhotoFile.size > MAX_FILE_SIZE_BYTES) {
+      if (primaryPhotoFile.size > MAX_UPLOAD_BYTES) {
         results.push({ xmp: '', displaySettings: '', originalFilename: originalName, generatedAt: '', settings: {} });
         continue;
       }
