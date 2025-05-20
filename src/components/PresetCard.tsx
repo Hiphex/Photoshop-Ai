@@ -1,4 +1,5 @@
 import dynamic from 'next/dynamic';
+import type { LightroomSettings } from '@/lib/presetUtils';
 
 const CompareImage = dynamic(() => import('react-compare-image'), { ssr: false });
 
@@ -9,11 +10,31 @@ interface PresetCardProps {
     displaySettings: string;
     originalFilename: string;
     generatedAt: string;
-    settings: any; // retained for typing but not used
+    settings: LightroomSettings;
   };
 }
 
 export default function PresetCard({ originalImageUrl, preset }: PresetCardProps) {
+  // Build CSS filter string from AI-generated settings
+  const settings = preset.settings;
+  const filters: string[] = [];
+  if (settings.exposure !== undefined) {
+    const b = settings.exposure * 0.1 + 1;
+    filters.push(`brightness(${b.toFixed(2)})`);
+  }
+  if (settings.contrast !== undefined) {
+    const c = settings.contrast / 100 + 1;
+    filters.push(`contrast(${c.toFixed(2)})`);
+  }
+  if (settings.saturation !== undefined) {
+    const s = settings.saturation / 100 + 1;
+    filters.push(`saturate(${s.toFixed(2)})`);
+  }
+  if (settings.tint !== undefined) {
+    filters.push(`hue-rotate(${settings.tint}deg)`);
+  }
+  const filterStyle = filters.join(' ');
+
   // Handler to download the XMP sidecar file
   const downloadXMP = () => {
     const blob = new Blob([preset.xmp], { type: 'application/xml' });
@@ -39,6 +60,7 @@ export default function PresetCard({ originalImageUrl, preset }: PresetCardProps
             leftImage={originalImageUrl}
             rightImage={originalImageUrl}
             sliderLineColor="#ffffff"
+            rightImageCss={{ filter: filterStyle }}
           />
         )}
       </div>
