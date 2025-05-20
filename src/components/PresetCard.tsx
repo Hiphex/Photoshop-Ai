@@ -19,6 +19,19 @@ export default function PresetCard({ originalImageUrl, preset }: PresetCardProps
   const [settings, setSettings] = useState<LightroomSettings>(preset.settings);
   const [open, setOpen] = useState(false);
 
+  // Handler to download the XMP sidecar file
+  const downloadXMP = () => {
+    const blob = new Blob([preset.xmp], { type: 'application/xml' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const safeFilename = preset.originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_+/g, '_');
+    link.download = `${safeFilename}_ai_preset.xmp`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
   // Build CSS filter string from key settings
   const filters: string[] = [];
   if (settings.exposure !== undefined) {
@@ -47,21 +60,23 @@ export default function PresetCard({ originalImageUrl, preset }: PresetCardProps
       </h3>
 
       <div className="relative mb-4">
-        {/* Before/After slider */}
         {originalImageUrl && (
           <CompareImage
             leftImage={originalImageUrl}
             rightImage={originalImageUrl}
             sliderLineColor="#ffffff"
+            rightImageCss={{ filter: filterStyle }}
           />
         )}
-        {/* Live filter overlay */}
-        {originalImageUrl && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ filter: filterStyle }}
-          />
-        )}
+      </div>
+
+      <div className="text-center mb-4">
+        <button
+          onClick={downloadXMP}
+          className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          Download .XMP Preset File
+        </button>
       </div>
 
       <button
@@ -85,7 +100,7 @@ export default function PresetCard({ originalImageUrl, preset }: PresetCardProps
               onChange={(e) =>
                 setSettings({ ...settings, exposure: parseFloat(e.target.value) })
               }
-              className="w-full"
+              className="w-full h-2 bg-gray-600 rounded-lg cursor-pointer accent-indigo-500"
             />
           </div>
 
@@ -101,7 +116,7 @@ export default function PresetCard({ originalImageUrl, preset }: PresetCardProps
               onChange={(e) =>
                 setSettings({ ...settings, contrast: parseInt(e.target.value, 10) })
               }
-              className="w-full"
+              className="w-full h-2 bg-gray-600 rounded-lg cursor-pointer accent-indigo-500"
             />
           </div>
 
@@ -117,7 +132,7 @@ export default function PresetCard({ originalImageUrl, preset }: PresetCardProps
               onChange={(e) =>
                 setSettings({ ...settings, saturation: parseInt(e.target.value, 10) })
               }
-              className="w-full"
+              className="w-full h-2 bg-gray-600 rounded-lg cursor-pointer accent-indigo-500"
             />
           </div>
 
@@ -133,7 +148,7 @@ export default function PresetCard({ originalImageUrl, preset }: PresetCardProps
               onChange={(e) =>
                 setSettings({ ...settings, tint: parseInt(e.target.value, 10) })
               }
-              className="w-full"
+              className="w-full h-2 bg-gray-600 rounded-lg cursor-pointer accent-indigo-500"
             />
           </div>
         </div>
