@@ -6,7 +6,8 @@ import {
   generatePresetSettingsFromAI,
   convertSettingsToXMP,
   formatSettingsForDisplay,
-} from '@/lib/presetUtils'; // Removed unused LightroomSettings import
+} from '@/lib/presetUtils';
+import type { LightroomSettings } from '@/lib/presetUtils';
 
 // Define the base temporary directory within /tmp
 const BASE_TMP_DIR = path.join('/tmp', 'ai_lightroom_presets');
@@ -66,14 +67,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'At least one primary photo is required.' }, { status: 400 });
     }
     // Process each primary photo
-    const results: Array<{ xmp: string; displaySettings: string; originalFilename: string; generatedAt: string }> = [];
+    const results: Array<{ xmp: string; displaySettings: string; originalFilename: string; generatedAt: string; settings: LightroomSettings }> = [];
     for (const primaryPhotoFile of primaryPhotoFiles) {
       // Sanitize and name
       const originalName = primaryPhotoFile.name.replace(/[^a-zA-Z0-9._\-\[\]() ]/g, '').substring(0, 100);
       // Size cap
       const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
       if (primaryPhotoFile.size > MAX_FILE_SIZE_BYTES) {
-        results.push({ xmp: '', displaySettings: '', originalFilename: originalName, generatedAt: '' });
+        results.push({ xmp: '', displaySettings: '', originalFilename: originalName, generatedAt: '', settings: {} });
         continue;
       }
       // Save primary photo
@@ -99,7 +100,13 @@ export async function POST(req: NextRequest) {
       );
       const xmp = convertSettingsToXMP(aiSettings, originalName);
       const display = formatSettingsForDisplay(aiSettings);
-      results.push({ xmp, displaySettings: display, originalFilename: originalName, generatedAt: new Date().toISOString() });
+      results.push({
+        xmp,
+        displaySettings: display,
+        originalFilename: originalName,
+        generatedAt: new Date().toISOString(),
+        settings: aiSettings,
+      });
     }
     return NextResponse.json(
       {
